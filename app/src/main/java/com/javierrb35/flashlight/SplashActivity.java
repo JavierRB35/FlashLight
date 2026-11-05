@@ -33,18 +33,18 @@ import java.util.Locale;
  * camera or flash, or requires a user click. MainActivity owns all normal features.
  */
 public final class SplashActivity extends Activity {
-    private static final String STATE_STARTED_AT = "splashStartedAt";
+    private static final String STATE_REMAINING = "splashRemainingMillis";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable launch = this::launchApplication;
-    private long startedAt;
+    private long remainingMillis = SplashTiming.VISIBLE_MILLIS;
+    private long lastResumeTime;
     private boolean launched;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        startedAt = savedInstanceState == null
-                ? SystemClock.elapsedRealtime()
-                : savedInstanceState.getLong(STATE_STARTED_AT, SystemClock.elapsedRealtime());
+        if (savedInstanceState != null)
+            remainingMillis = savedInstanceState.getLong(STATE_REMAINING, SplashTiming.VISIBLE_MILLIS);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().setNavigationBarColor(BrandPalette.NAVY);
@@ -57,25 +57,30 @@ public final class SplashActivity extends Activity {
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
-        if (!launched) {
-            handler.removeCallbacks(launch);
-            handler.postDelayed(launch,
-                    SplashTiming.remainingMillis(startedAt, SystemClock.elapsedRealtime()));
-        }
+    protected void onResume() {
+        super.onResume();
+        lastResumeTime = SystemClock.elapsedRealtime();
+        if (!launched) handler.postDelayed(launch, remainingMillis);
     }
 
     @Override
-    protected void onStop() {
+    protected void onPause() {
         handler.removeCallbacks(launch);
-        super.onStop();
+        remainingMillis = SplashTiming.remainingMillis(
+                remainingMillis, SystemClock.elapsedRealtime() - lastResumeTime);
+        super.onPause();
     }
 
     @Override
     protected void onSaveInstanceState(Bundle outState) {
-        outState.putLong(STATE_STARTED_AT, startedAt);
+        outState.putLong(STATE_REMAINING, remainingMillis);
         super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacks(launch);
+        super.onDestroy();
     }
 
     private void launchApplication() {
