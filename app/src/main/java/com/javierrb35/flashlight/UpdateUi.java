@@ -23,7 +23,6 @@ final class UpdateUi {
 
     void onOpen(){
         UpdateChecker.schedule(activity);
-        check(false);
         Intent intent=activity.getIntent();
         if(intent!=null && ACTION_UPDATES.equals(intent.getAction())){
             activity.setIntent(new Intent(activity,MainActivity.class));
@@ -31,7 +30,10 @@ final class UpdateUi {
             if(remembered!=null)
                 new android.os.Handler(android.os.Looper.getMainLooper())
                         .post(()->prompt(remembered));
+            else check(true);
+            return; // Do not display a duplicate prompt from the automatic check.
         }
+        check(false);
     }
 
     void onResume(){installer.onResume();}
