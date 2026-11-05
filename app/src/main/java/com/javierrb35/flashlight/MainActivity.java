@@ -175,6 +175,7 @@ public final class MainActivity extends Activity {
         TextView updateButton = text("↻", 28, BrandPalette.TURQUOISE, true);
         updateButton.setGravity(Gravity.CENTER);
         updateButton.setContentDescription("Comprobar actualizaciones de FlashLight");
+        updateButton.setTooltipText("Buscar actualizaciones");
         updateButton.setOnClickListener(v -> updates.openMenu());
         header.addView(updateButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         page.addView(header);
