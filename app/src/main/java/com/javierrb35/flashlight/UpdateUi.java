@@ -7,17 +7,21 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 /** Non-blocking in-app checks, optional prompts and a manual update control. */
 final class UpdateUi {
     static final String ACTION_UPDATES="com.javierrb35.flashlight.action.UPDATES";
     private static final int NOTIFICATION_PERMISSION_REQUEST=8056;
     private final Activity activity;
+    private final BooleanSupplier lightOrTransmissionActive;
     private final UpdateInstaller installer;
+    private UpdateRelease deferred;
     private final AtomicBoolean checking=new AtomicBoolean(false);
 
-    UpdateUi(Activity activity){
+    UpdateUi(Activity activity, BooleanSupplier lightOrTransmissionActive){
         this.activity=activity;
+        this.lightOrTransmissionActive=lightOrTransmissionActive;
         this.installer=new UpdateInstaller(activity);
     }
 
@@ -36,7 +40,19 @@ final class UpdateUi {
         check(false);
     }
 
-    void onResume(){installer.onResume();}
+    void onResume(){
+        installer.onResume();
+        onControlsRefreshed();
+    }
+
+    /** A check must never obscure the STOP button during active light signalling. */
+    void onControlsRefreshed(){
+        if(deferred==null || lightOrTransmissionActive.getAsBoolean() ||
+                !activity.hasWindowFocus() || activity.isFinishing())return;
+        UpdateRelease pending=deferred;
+        deferred=null;
+        activity.getWindow().getDecorView().post(()->prompt(pending));
+    }
 
     void onNewIntent(Intent intent){
         if(intent!=null && ACTION_UPDATES.equals(intent.getAction())){
@@ -86,6 +102,10 @@ final class UpdateUi {
 
     private void prompt(UpdateRelease release){
         if(activity.isFinishing()||activity.isDestroyed())return;
+        if(lightOrTransmissionActive.getAsBoolean()){
+            deferred=release;
+            return;
+        }
         if(!ReleaseVersions.newer(release.tag,UpdateChecker.installedName(activity),
                 UpdateChecker.installedCode(activity)))return;
         UpdateChecker.markPrompted(activity,release);
