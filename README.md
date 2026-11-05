@@ -14,9 +14,25 @@ una sola pantalla.
   el estrobo.
 - **SOS:** emite el patrón Morse estándar (tres cortos, tres largos y tres
   cortos) en bucle; requiere confirmación antes de cada sesión.
+- **Enviar:** escribe un mensaje y pulsa **Enviar con flash**. La app muestra
+  una vista previa del texto normalizado y pide confirmación antes de emitirlo.
+  Inicia primero la recepción en el otro teléfono y centra el flash emisor en
+  su vista de cámara. La barra muestra el avance exacto por pulsos de luz
+  completados (cada punto o raya cuenta como un destello).
+- **Recibir:** concede el permiso de cámara al iniciar la recepción. La vista
+  previa analiza la luz y transcribe las letras detectadas en el editor; pulsa
+  **Detener recepción** para cerrar la cámara y finalizar el último carácter.
+- El envío usa Morse internacional a 200 ms por punto y 600 ms por raya. Las
+  letras y palabras se separan con pausas estándar. Se admiten A–Z, números y
+  los signos `. , ? !`; los acentos se normalizan (por ejemplo, `Á` se convierte
+  en `A`) y la app avisa si debe omitir caracteres no compatibles.
+- La recepción se basa en el brillo de la imagen de cámara. La distancia,
+  iluminación ambiental, enfoque y velocidad de fotogramas pueden afectar a la
+  precisión; para mejores resultados, mantén ambos teléfonos estables y el
+  emisor centrado en la vista previa.
 - Al salir de la aplicación, el flash se apaga automáticamente.
-- El permiso de cámara solo se usa para controlar el LED; la app no toma fotos
-  ni graba vídeo.
+- La cámara se activa al iniciar la recepción y se cierra al detenerla o salir.
+  No se toman fotos ni se graba vídeo.
 
 > **Precaución:** los destellos pueden provocar convulsiones fotosensibles. No
 > actives el estrobo ni la señal SOS cerca de personas con epilepsia o
