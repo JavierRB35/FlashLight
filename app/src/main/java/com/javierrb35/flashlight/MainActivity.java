@@ -18,7 +18,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -27,6 +26,7 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_CAMERA = 41;
     private static final int MODE_TORCH = 0;
     private static final int MODE_STROBE = 1;
+    private static final int MODE_SOS = 2;
     private static final int NAVY = Color.rgb(16, 26, 44);
     private static final int INK = Color.rgb(28, 39, 58);
     private static final int GOLD = Color.rgb(245, 185, 66);
@@ -37,6 +37,7 @@ public final class MainActivity extends Activity {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable strobeTick = this::toggleStrobeOutput;
+    private final Runnable sosTick = this::advanceSos;
     private CameraManager cameraManager;
     private String cameraId;
     private TextView mainAction;
@@ -44,13 +45,20 @@ public final class MainActivity extends Activity {
     private TextView speedLabel;
     private TextView torchModeButton;
     private TextView strobeModeButton;
+    private TextView sosModeButton;
     private SeekBar speedSlider;
+    private LinearLayout speedCard;
+    private TextView speedTitle;
+    private LinearLayout rangeRow;
+    private TextView sosPatternHint;
     private LinearLayout warningCard;
     private int mode = MODE_TORCH;
     private int flashesPerSecond = 1;
     private boolean running;
     private boolean ledOn;
     private boolean permissionPending;
+    private MorsePattern.Segment[] sosSegments;
+    private int sosSegmentIndex;
 
     @Override
     public void onCreate(Bundle state) {
@@ -63,14 +71,10 @@ public final class MainActivity extends Activity {
     }
 
     private View createScreen() {
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(PAPER);
-
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(22), dp(18), dp(22), dp(26));
-        scroll.addView(page);
+        page.setPadding(dp(20), dp(10), dp(20), dp(12));
+        page.setBackgroundColor(PAPER);
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -81,14 +85,9 @@ public final class MainActivity extends Activity {
         heading.setPadding(dp(12), 0, 0, 0);
         TextView title = text("FlashLight", 26, NAVY, true);
         heading.addView(title);
-        heading.addView(text("LUZ A TU MANERA", 11, MUTED, true));
+        heading.addView(text("LUZ A TU MANERA · SIMPLE Y SEGURA", 10, MUTED, true));
         header.addView(heading);
         page.addView(header);
-
-        TextView intro = text("Una linterna sencilla, siempre bajo tu control.", 15, MUTED, false);
-        LinearLayout.LayoutParams introParams = params(-1, -2);
-        introParams.topMargin = dp(18);
-        page.addView(intro, introParams);
 
         LinearLayout modes = new LinearLayout(this);
         modes.setOrientation(LinearLayout.HORIZONTAL);
@@ -96,48 +95,54 @@ public final class MainActivity extends Activity {
         modes.setBackground(round(Color.rgb(231, 234, 239), 16));
         torchModeButton = modeButton("Linterna", MODE_TORCH);
         strobeModeButton = modeButton("Estrobo", MODE_STROBE);
-        modes.addView(torchModeButton, new LinearLayout.LayoutParams(0, dp(50), 1));
-        modes.addView(strobeModeButton, new LinearLayout.LayoutParams(0, dp(50), 1));
+        sosModeButton = modeButton("SOS", MODE_SOS);
+        modes.addView(torchModeButton, new LinearLayout.LayoutParams(0, dp(44), 1));
+        modes.addView(strobeModeButton, new LinearLayout.LayoutParams(0, dp(44), 1));
+        modes.addView(sosModeButton, new LinearLayout.LayoutParams(0, dp(44), 1));
         LinearLayout.LayoutParams modesParams = params(-1, -2);
-        modesParams.topMargin = dp(25);
+        modesParams.topMargin = dp(10);
         page.addView(modes, modesParams);
 
         LinearLayout lightPanel = vertical();
-        lightPanel.setGravity(Gravity.CENTER_HORIZONTAL);
-        lightPanel.setPadding(dp(18), dp(24), dp(18), dp(22));
+        lightPanel.setGravity(Gravity.CENTER);
+        lightPanel.setPadding(dp(14), dp(10), dp(14), dp(10));
         lightPanel.setBackground(round(Color.WHITE, 24));
-        LinearLayout.LayoutParams panelParams = params(-1, -2);
-        panelParams.topMargin = dp(15);
+        lightPanel.setMinimumHeight(dp(142));
+        LinearLayout.LayoutParams panelParams = new LinearLayout.LayoutParams(-1, 0, 1);
+        panelParams.topMargin = dp(10);
+        panelParams.bottomMargin = dp(10);
         page.addView(lightPanel, panelParams);
 
         mainAction = text("ENCENDER", 16, NAVY, true);
         mainAction.setGravity(Gravity.CENTER);
-        mainAction.setMinHeight(dp(164));
-        mainAction.setBackground(round(GOLD, 100));
+        mainAction.setMinHeight(dp(96));
+        mainAction.setBackground(round(GOLD, 28));
         mainAction.setElevation(dp(3));
         mainAction.setFocusable(true);
         mainAction.setContentDescription("Encender linterna");
         mainAction.setOnClickListener(v -> onMainAction());
-        lightPanel.addView(mainAction, params(-1, dp(164)));
+        lightPanel.addView(mainAction, params(-1, dp(104)));
 
         status = text("Apagada", 16, MUTED, true);
         status.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams statusParams = params(-1, -2);
-        statusParams.topMargin = dp(16);
+        statusParams.topMargin = dp(8);
         lightPanel.addView(status, statusParams);
 
-        LinearLayout speedCard = vertical();
-        speedCard.setPadding(dp(18), dp(16), dp(18), dp(14));
+        speedCard = vertical();
+        speedCard.setPadding(dp(14), dp(10), dp(14), dp(8));
         speedCard.setBackground(round(Color.WHITE, 20));
         LinearLayout.LayoutParams speedParams = params(-1, -2);
-        speedParams.topMargin = dp(15);
+        speedParams.topMargin = dp(0);
         page.addView(speedCard, speedParams);
-        TextView speedTitle = text("Velocidad del estrobo", 17, INK, true);
-        speedCard.addView(speedTitle);
-        speedLabel = text("1 destello por segundo", 14, MUTED, false);
-        LinearLayout.LayoutParams speedLabelParams = params(-1, -2);
-        speedLabelParams.topMargin = dp(4);
-        speedCard.addView(speedLabel, speedLabelParams);
+        LinearLayout speedHeading = new LinearLayout(this);
+        speedHeading.setGravity(Gravity.CENTER_VERTICAL);
+        speedTitle = text("Velocidad", 15, INK, true);
+        speedHeading.addView(speedTitle, new LinearLayout.LayoutParams(0, -2, 1));
+        speedLabel = text("1 destello/seg", 14, NAVY, true);
+        speedLabel.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        speedHeading.addView(speedLabel);
+        speedCard.addView(speedHeading);
         speedSlider = new SeekBar(this);
         speedSlider.setMax(StrobeTiming.MAX_FLASHES_PER_SECOND
                 - StrobeTiming.MIN_FLASHES_PER_SECOND);
@@ -150,7 +155,7 @@ public final class MainActivity extends Activity {
                 updateSpeedLabel();
                 if (running && mode == MODE_STROBE) {
                     handler.removeCallbacks(strobeTick);
-                    handler.postDelayed(strobeTick, StrobeTiming.halfPeriodMillis(flashesPerSecond));
+                    handler.post(strobeTick);
                 }
             }
 
@@ -160,44 +165,46 @@ public final class MainActivity extends Activity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
-        speedCard.addView(speedSlider, params(-1, dp(48)));
-        TextView range = text("1 flash/seg", 12, MUTED, false);
-        LinearLayout rangeRow = new LinearLayout(this);
+        speedCard.addView(speedSlider, params(-1, dp(44)));
+        TextView range = text("1 destello/seg", 12, MUTED, false);
+        rangeRow = new LinearLayout(this);
         rangeRow.setGravity(Gravity.CENTER_VERTICAL);
         rangeRow.addView(range, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView rangeMax = text("4 flashes/seg", 12, MUTED, false);
+        TextView rangeMax = text("6 destellos/seg", 12, MUTED, false);
         rangeMax.setGravity(Gravity.RIGHT);
         rangeRow.addView(rangeMax);
         speedCard.addView(rangeRow);
+        sosPatternHint = text("···  −−−  ···\n3 cortos · 3 largos · 3 cortos",
+                12, NAVY, true);
+        sosPatternHint.setGravity(Gravity.CENTER);
+        speedCard.addView(sosPatternHint);
 
         warningCard = vertical();
-        warningCard.setPadding(dp(16), dp(14), dp(16), dp(14));
+        warningCard.setPadding(dp(12), dp(8), dp(12), dp(8));
         warningCard.setBackground(round(WARNING_BG, 16));
         LinearLayout.LayoutParams warningParams = params(-1, -2);
-        warningParams.topMargin = dp(15);
+        warningParams.topMargin = dp(8);
         page.addView(warningCard, warningParams);
-        warningCard.addView(text("Precaución con los destellos", 15, WARNING_INK, true));
+        warningCard.addView(text("⚠ Precaución con los destellos", 13, WARNING_INK, true));
         TextView warning = text(
-                "La luz intermitente puede provocar convulsiones en personas sensibles. "
-                        + "No la uses cerca de personas con epilepsia, no mires directamente "
-                        + "al LED y detén el efecto si alguien siente malestar.",
-                14, WARNING_INK, false);
-        LinearLayout.LayoutParams warningTextParams = params(-1, -2);
-        warningTextParams.topMargin = dp(6);
-        warningCard.addView(warning, warningTextParams);
+                "Puede provocar convulsiones fotosensibles. No usar cerca de personas sensibles "
+                        + "ni mirar directamente al LED.",
+                12, WARNING_INK, false);
+        warningCard.addView(warning);
 
-        TextView footer = text("El flash se apaga al salir de la aplicación.", 13, MUTED, false);
+        TextView footer = text("El flash se apaga al salir.", 11, MUTED, false);
         footer.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footerParams = params(-1, -2);
-        footerParams.topMargin = dp(20);
+        footerParams.topMargin = dp(6);
         page.addView(footer, footerParams);
-        return scroll;
+        return page;
     }
 
     private TextView modeButton(String label, int selectedMode) {
         TextView button = text(label, 15, INK, true);
         button.setGravity(Gravity.CENTER);
         button.setContentDescription("Modo " + label);
+        button.setTextSize(13);
         button.setOnClickListener(v -> selectMode(selectedMode));
         return button;
     }
@@ -219,25 +226,27 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA);
             return;
         }
-        if (mode == MODE_STROBE) {
-            confirmStrobe();
+        if (mode == MODE_STROBE || mode == MODE_SOS) {
+            confirmFlashingMode();
         } else {
-            startLight(false);
+            startLight();
         }
     }
 
-    private void confirmStrobe() {
+    private void confirmFlashingMode() {
+        boolean sos = mode == MODE_SOS;
         new AlertDialog.Builder(this)
-                .setTitle("Confirma el modo estrobo")
+                .setTitle(sos ? "Confirma la señal SOS" : "Confirma el modo estrobo")
                 .setMessage("La luz intermitente puede desencadenar convulsiones "
                         + "fotosensibles. No la uses cerca de personas sensibles ni mires "
                         + "directamente al flash. ¿Quieres continuar?")
                 .setNegativeButton("Cancelar", (dialog, which) -> refreshControls())
-                .setPositiveButton("Activar estrobo", (dialog, which) -> startLight(true))
+                .setPositiveButton(sos ? "Activar SOS" : "Activar estrobo",
+                        (dialog, which) -> startLight())
                 .show();
     }
 
-    private void startLight(boolean strobe) {
+    private void startLight() {
         try {
             cameraId = findFlashCamera();
             if (cameraId == null) {
@@ -249,8 +258,12 @@ public final class MainActivity extends Activity {
             cameraManager.setTorchMode(cameraId, true);
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             refreshControls();
-            if (strobe) {
+            if (mode == MODE_STROBE) {
                 handler.postDelayed(strobeTick, StrobeTiming.halfPeriodMillis(flashesPerSecond));
+            } else if (mode == MODE_SOS) {
+                sosSegments = MorsePattern.sos();
+                sosSegmentIndex = 0;
+                handler.postDelayed(sosTick, sosSegments[0].durationMillis);
             }
         } catch (CameraAccessException | IllegalArgumentException | SecurityException error) {
             stopLight();
@@ -282,12 +295,29 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void advanceSos() {
+        if (!running || mode != MODE_SOS || cameraId == null || sosSegments == null) return;
+        sosSegmentIndex = (sosSegmentIndex + 1) % sosSegments.length;
+        MorsePattern.Segment segment = sosSegments[sosSegmentIndex];
+        try {
+            ledOn = segment.lightOn;
+            cameraManager.setTorchMode(cameraId, ledOn);
+            refreshControls();
+            handler.postDelayed(sosTick, segment.durationMillis);
+        } catch (CameraAccessException | IllegalArgumentException | SecurityException error) {
+            stopLight();
+            showFailure("El flash dejó de estar disponible. La señal SOS se ha detenido.");
+        }
+    }
+
     private void stopLight() {
         handler.removeCallbacks(strobeTick);
-        boolean wasOn = ledOn;
+        handler.removeCallbacks(sosTick);
+        boolean wasActive = running || ledOn;
         running = false;
         ledOn = false;
-        if (wasOn && cameraId != null && cameraManager != null) {
+        sosSegments = null;
+        if (wasActive && cameraId != null && cameraManager != null) {
             try {
                 cameraManager.setTorchMode(cameraId, false);
             } catch (CameraAccessException | IllegalArgumentException | SecurityException error) {
@@ -301,26 +331,39 @@ public final class MainActivity extends Activity {
     private void refreshControls() {
         if (mainAction == null) return;
         boolean strobeMode = mode == MODE_STROBE;
-        torchModeButton.setTextColor(strobeMode ? INK : NAVY);
-        torchModeButton.setBackground(round(strobeMode ? Color.TRANSPARENT : Color.WHITE, 12));
-        strobeModeButton.setTextColor(strobeMode ? NAVY : INK);
-        strobeModeButton.setBackground(round(strobeMode ? Color.WHITE : Color.TRANSPARENT, 12));
-        speedSlider.setEnabled(strobeMode && !running);
-        warningCard.setVisibility(strobeMode ? View.VISIBLE : View.GONE);
-        mainAction.setText(running ? "APAGAR" : "ENCENDER");
-        mainAction.setBackground(round(running ? Color.rgb(255, 225, 222) : GOLD, 100));
-        mainAction.setContentDescription(running ? "Apagar linterna" : "Encender linterna");
+        boolean sosMode = mode == MODE_SOS;
+        updateModeButton(torchModeButton, mode == MODE_TORCH);
+        updateModeButton(strobeModeButton, strobeMode);
+        updateModeButton(sosModeButton, sosMode);
+        speedSlider.setEnabled(strobeMode);
+        warningCard.setVisibility(strobeMode || sosMode ? View.VISIBLE : View.GONE);
+        mainAction.setText(running ? "DETENER" : (sosMode ? "INICIAR SOS" : "ENCENDER"));
+        mainAction.setBackground(round(running ? Color.rgb(255, 225, 222) : GOLD, 28));
+        mainAction.setContentDescription(running ? "Detener luz"
+                : (sosMode ? "Iniciar señal SOS en código Morse" : "Encender linterna"));
+        speedCard.setVisibility(strobeMode || sosMode ? View.VISIBLE : View.GONE);
+        speedTitle.setText(sosMode ? "Señal SOS en código Morse" : "Velocidad del estrobo");
+        speedLabel.setVisibility(sosMode ? View.GONE : View.VISIBLE);
+        speedSlider.setVisibility(sosMode ? View.GONE : View.VISIBLE);
+        rangeRow.setVisibility(sosMode ? View.GONE : View.VISIBLE);
+        sosPatternHint.setVisibility(sosMode ? View.VISIBLE : View.GONE);
         status.setText(running
-                ? (strobeMode ? "Estrobo activo · " + flashesPerSecond + " Hz" : "Linterna encendida")
+                ? (strobeMode ? "Estrobo activo · " + flashesPerSecond + " Hz"
+                        : (sosMode ? "SOS en Morse activo" : "Linterna encendida"))
                 : "Apagada");
         status.setTextColor(running ? NAVY : MUTED);
     }
 
+    private void updateModeButton(TextView button, boolean selected) {
+        button.setTextColor(selected ? NAVY : INK);
+        button.setBackground(round(selected ? Color.WHITE : Color.TRANSPARENT, 12));
+        button.setSelected(selected);
+    }
+
     private void updateSpeedLabel() {
         if (speedLabel == null) return;
-        speedLabel.setText(flashesPerSecond == 1
-                ? "1 destello por segundo"
-                : flashesPerSecond + " destellos por segundo");
+        speedLabel.setText(flashesPerSecond + (flashesPerSecond == 1
+                ? " destello/seg" : " destellos/seg"));
     }
 
     private void showFailure(String message) {
@@ -336,8 +379,8 @@ public final class MainActivity extends Activity {
             showFailure("Se necesita permiso de cámara para controlar el flash. No se toman fotos ni se graba vídeo.");
             return;
         }
-        if (mode == MODE_STROBE) confirmStrobe();
-        else startLight(false);
+        if (mode == MODE_STROBE || mode == MODE_SOS) confirmFlashingMode();
+        else startLight();
     }
 
     @Override
