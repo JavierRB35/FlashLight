@@ -148,7 +148,8 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(NAVY);
         getWindow().setNavigationBarColor(NAVY);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-        updates = new UpdateUi(this);
+        updates = new UpdateUi(this, () -> running || ledOn || receiving ||
+                receiverCameraOpening || transmission != null);
         setContentView(createScreen());
         refreshControls();
         updates.onOpen();
@@ -1068,6 +1069,7 @@ public final class MainActivity extends Activity {
         if (receiveButton != null) {
             receiveButton.setText(receiving ? "DETENER RECEPCIÓN" : "INICIAR RECEPCIÓN");
         }
+        if (updates != null) updates.onControlsRefreshed();
     }
 
     private void updateModeButton(TextView button, boolean selected) {
