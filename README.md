@@ -12,6 +12,14 @@ una sola pantalla.
 - La transición abre automáticamente la pantalla principal. El temporizador conserva el tiempo restante ante rotaciones o interrupciones, y el splash no requiere permisos ni enciende el LED.
 - El icono del escritorio Android, el encabezado y el botón principal utilizan la mascota. Los controles comparten el azul marino, amarillo, coral y turquesa de la imagen original, respetando las advertencias y confirmaciones de seguridad de estrobo y SOS.
 
+## Actualizaciones
+
+La app comprueba **GitHub Releases** al abrir y de forma periódica (aproximadamente cada 12 horas, según Android). El icono **↻** del encabezado permite comprobar manualmente y activar avisos en Android 13 o posterior.
+
+Las actualizaciones son voluntarias: solo después de pulsar **Actualizar** se descarga una APK. Se verifican SHA-256, tamaño, versión, paquete y firma antes de abrir el instalador Android. La linterna y Morse funcionan sin conexión.
+
+**El canal requiere una primera Release APK firmada**; los artefactos de depuración de GitHub Actions no son actualizaciones oficiales. Consulta [publicación, firma y pruebas del actualizador](docs/ACTUALIZACIONES.md).
+
 ## Uso
 
 - **Linterna:** toca el control principal para encender o apagar el flash.
