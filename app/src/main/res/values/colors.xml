@@ -1,3 +1,8 @@
 <resources>
-    <color name="launcher_background">#101A2C</color>
+    <color name="launcher_background">#102045</color>
+    <color name="brand_navy">#102045</color>
+    <color name="brand_yellow">#FCD048</color>
+    <color name="brand_coral">#FC613A</color>
+    <color name="brand_turquoise">#3FB7B3</color>
+    <color name="brand_canvas">#F4F7FB</color>
 </resources>
