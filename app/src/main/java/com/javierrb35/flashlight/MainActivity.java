@@ -4,11 +4,13 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -63,11 +65,11 @@ public final class MainActivity extends Activity {
     private static final int PREVIEW_HEIGHT = 480;
     private static final int BRIGHT_PIXEL_THRESHOLD = 220;
     private static final long MORSE_UNIT_MILLIS = MorseCodec.UNIT_MILLIS;
-    private static final int NAVY = Color.rgb(16, 26, 44);
-    private static final int INK = Color.rgb(28, 39, 58);
-    private static final int GOLD = Color.rgb(245, 185, 66);
-    private static final int PAPER = Color.rgb(245, 246, 248);
-    private static final int MUTED = Color.rgb(101, 112, 130);
+    private static final int NAVY = BrandPalette.NAVY;
+    private static final int INK = BrandPalette.INK;
+    private static final int GOLD = BrandPalette.YELLOW;
+    private static final int PAPER = BrandPalette.CANVAS;
+    private static final int MUTED = BrandPalette.MUTED;
     private static final int WARNING_BG = Color.rgb(255, 246, 225);
     private static final int WARNING_INK = Color.rgb(117, 75, 12);
 
@@ -159,11 +161,11 @@ public final class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         ImageView icon = new ImageView(this);
-        icon.setImageResource(R.drawable.ic_flashlight);
+        icon.setImageResource(R.drawable.flashlight_mascot);
         header.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout heading = vertical();
         heading.setPadding(dp(12), 0, 0, 0);
-        TextView title = text("FlashLight", 26, NAVY, true);
+        TextView title = text("Flashlight", 26, NAVY, true);
         heading.addView(title);
         heading.addView(text("LUZ A TU MANERA · SIMPLE Y SEGURA", 10, MUTED, true));
         header.addView(heading);
@@ -172,7 +174,7 @@ public final class MainActivity extends Activity {
         LinearLayout pageModes = new LinearLayout(this);
         pageModes.setOrientation(LinearLayout.HORIZONTAL);
         pageModes.setPadding(dp(4), dp(4), dp(4), dp(4));
-        pageModes.setBackground(round(Color.rgb(231, 234, 239), 16));
+        pageModes.setBackground(round(BrandPalette.SELECTOR, 16));
         lightPageButton = pageModeButton("Luz", PAGE_LIGHT);
         sendPageButton = pageModeButton("Enviar", PAGE_SEND);
         receivePageButton = pageModeButton("Recibir", PAGE_RECEIVE);
@@ -186,7 +188,7 @@ public final class MainActivity extends Activity {
         LinearLayout modes = new LinearLayout(this);
         modes.setOrientation(LinearLayout.HORIZONTAL);
         modes.setPadding(dp(5), dp(5), dp(5), dp(5));
-        modes.setBackground(round(Color.rgb(231, 234, 239), 16));
+        modes.setBackground(round(BrandPalette.SELECTOR, 16));
         lightModeRow = modes;
         torchModeButton = modeButton("Linterna", MODE_TORCH);
         strobeModeButton = modeButton("Estrobo", MODE_STROBE);
@@ -212,6 +214,13 @@ public final class MainActivity extends Activity {
         mainAction.setGravity(Gravity.CENTER);
         mainAction.setMinHeight(dp(96));
         mainAction.setBackground(round(GOLD, 28));
+        Drawable mascot = getDrawable(R.drawable.flashlight_mascot);
+        if (mascot != null) {
+            mascot.setBounds(0, 0, dp(30), dp(30));
+            mainAction.setCompoundDrawables(mascot, null, null, null);
+            mainAction.setCompoundDrawablePadding(dp(10));
+            mainAction.setPadding(dp(18), 0, dp(18), 0);
+        }
         mainAction.setElevation(dp(3));
         mainAction.setFocusable(true);
         mainAction.setContentDescription("Encender linterna");
@@ -239,6 +248,8 @@ public final class MainActivity extends Activity {
         speedHeading.addView(speedLabel);
         speedCard.addView(speedHeading);
         speedSlider = new SeekBar(this);
+        speedSlider.setProgressTintList(ColorStateList.valueOf(BrandPalette.TURQUOISE));
+        speedSlider.setThumbTintList(ColorStateList.valueOf(BrandPalette.CORAL));
         speedSlider.setMax(StrobeTiming.MAX_FLASHES_PER_SECOND
                 - StrobeTiming.MIN_FLASHES_PER_SECOND);
         speedSlider.setProgress(0);
@@ -1052,7 +1063,7 @@ public final class MainActivity extends Activity {
 
     private void updateModeButton(TextView button, boolean selected) {
         button.setTextColor(selected ? NAVY : INK);
-        button.setBackground(round(selected ? Color.WHITE : Color.TRANSPARENT, 12));
+        button.setBackground(round(selected ? GOLD : Color.TRANSPARENT, 12));
         button.setSelected(selected);
     }
 
