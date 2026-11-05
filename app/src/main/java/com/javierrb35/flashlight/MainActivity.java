@@ -73,6 +73,7 @@ public final class MainActivity extends Activity {
     private static final int WARNING_BG = Color.rgb(255, 246, 225);
     private static final int WARNING_INK = Color.rgb(117, 75, 12);
 
+    private UpdateUi updates;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable strobeTick = this::toggleStrobeOutput;
     private final Runnable sosTick = this::advanceSos;
@@ -147,8 +148,11 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(NAVY);
         getWindow().setNavigationBarColor(NAVY);
         cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        updates = new UpdateUi(this, () -> running || ledOn || receiving ||
+                receiverCameraOpening || transmission != null);
         setContentView(createScreen());
         refreshControls();
+        updates.onOpen();
     }
 
     private View createScreen() {
@@ -168,7 +172,13 @@ public final class MainActivity extends Activity {
         TextView title = text("Flashlight", 26, NAVY, true);
         heading.addView(title);
         heading.addView(text("LUZ A TU MANERA · SIMPLE Y SEGURA", 10, MUTED, true));
-        header.addView(heading);
+        header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView updateButton = text("↻", 28, BrandPalette.TURQUOISE, true);
+        updateButton.setGravity(Gravity.CENTER);
+        updateButton.setContentDescription("Comprobar actualizaciones de FlashLight");
+        updateButton.setTooltipText("Buscar actualizaciones");
+        updateButton.setOnClickListener(v -> updates.openMenu());
+        header.addView(updateButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         page.addView(header);
 
         LinearLayout pageModes = new LinearLayout(this);
@@ -1059,6 +1069,7 @@ public final class MainActivity extends Activity {
         if (receiveButton != null) {
             receiveButton.setText(receiving ? "DETENER RECEPCIÓN" : "INICIAR RECEPCIÓN");
         }
+        if (updates != null) updates.onControlsRefreshed();
     }
 
     private void updateModeButton(TextView button, boolean selected) {
@@ -1107,6 +1118,25 @@ public final class MainActivity extends Activity {
                 else startLight();
                 break;
         }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && updates != null) updates.onControlsRefreshed();
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (updates != null) updates.onNewIntent(intent);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (updates != null) updates.onResume();
     }
 
     @Override
