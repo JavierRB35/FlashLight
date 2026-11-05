@@ -102,7 +102,7 @@ final class UpdateUi {
 
     private void prompt(UpdateRelease release){
         if(activity.isFinishing()||activity.isDestroyed())return;
-        if(lightOrTransmissionActive.getAsBoolean()){
+        if(lightOrTransmissionActive.getAsBoolean() || !activity.hasWindowFocus()){
             deferred=release;
             return;
         }
