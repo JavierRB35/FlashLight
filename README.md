@@ -6,6 +6,12 @@ código Morse. La frecuencia del estrobo se puede modificar mientras está
 activo. La interfaz está diseñada para mostrar los controles principales en
 una sola pantalla.
 
+## Identidad y arranque
+
+- Al abrir **Flashlight** se muestra durante **cuatro segundos de tiempo visible** una pantalla de bienvenida con la mascota de linterna, nombre de la aplicación, autor, correo electrónico y mes/año en español calculados al iniciar. No hay botón que pulsar.
+- La transición abre automáticamente la pantalla principal. El temporizador conserva el tiempo restante ante rotaciones o interrupciones, y el splash no requiere permisos ni enciende el LED.
+- El icono del escritorio Android, el encabezado y el botón principal utilizan la mascota. Los controles comparten el azul marino, amarillo, coral y turquesa de la imagen original, respetando las advertencias y confirmaciones de seguridad de estrobo y SOS.
+
 ## Uso
 
 - **Linterna:** toca el control principal para encender o apagar el flash.
