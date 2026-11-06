@@ -28,6 +28,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -85,24 +86,30 @@ private const val STATE_REMAINING = "splashRemainingMillis"
 @Composable
 private fun SplashContent(onLaunch: () -> Unit) {
     var remainingMillis by rememberSaveable { mutableLongStateOf(SplashTiming.VISIBLE_MILLIS) }
-    var lastResumeElapsed by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    var resumed by remember { mutableLongStateOf(1L) }
-
     val lifecycleOwner = LocalLifecycleOwner.current
+    var lastResumeElapsed by remember(lifecycleOwner) { mutableLongStateOf(0L) }
+    var resumed by remember(lifecycleOwner) {
+        mutableStateOf(
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+        )
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
-                    lastResumeElapsed = SystemClock.elapsedRealtime()
-                    resumed++
+                    resumed = true
                 }
 
                 Lifecycle.Event.ON_PAUSE -> {
-                    remainingMillis = SplashTiming.remainingMillis(
-                        remainingMillis,
-                        SystemClock.elapsedRealtime() - lastResumeElapsed,
-                    )
-                    resumed--
+                    if (lastResumeElapsed != 0L) {
+                        remainingMillis = SplashTiming.remainingMillis(
+                            remainingMillis,
+                            SystemClock.elapsedRealtime() - lastResumeElapsed,
+                        )
+                        lastResumeElapsed = 0L
+                    }
+                    resumed = false
                 }
 
                 else -> Unit
@@ -112,16 +119,21 @@ private fun SplashContent(onLaunch: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Counts down only while resumed: the frame clock is ticked manually so a
-    // paused splash (activity behind another one) does not consume its time.
-    LaunchedEffect(resumed > 0L) {
-        if (resumed <= 0L) return@LaunchedEffect
+    // Let one frame render before starting the timer, then measure every tick
+    // from the start of this visible interval.
+    LaunchedEffect(resumed) {
+        if (!resumed) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        val intervalStartedAt = SystemClock.elapsedRealtime()
+        val intervalRemaining = remainingMillis
+        lastResumeElapsed = intervalStartedAt
         while (remainingMillis > 0) {
             withFrameNanos { }
-            val visibleElapsed = SystemClock.elapsedRealtime() - lastResumeElapsed
-            remainingMillis = SplashTiming.remainingMillis(remainingMillis, visibleElapsed)
+            val visibleElapsed = SystemClock.elapsedRealtime() - intervalStartedAt
+            remainingMillis = SplashTiming.remainingMillis(intervalRemaining, visibleElapsed)
         }
-        onLaunch()
+        if (resumed) onLaunch()
     }
 
     SplashBody(remainingMillis)
