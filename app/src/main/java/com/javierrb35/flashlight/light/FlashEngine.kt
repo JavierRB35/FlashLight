@@ -76,6 +76,7 @@ class FlashEngine(
         val totalFlashes: Int = 0,
         val transmittingCharacters: Int = 0,
         val transmitting: Boolean = false,
+        val preparationSecondsRemaining: Int = 0,
         val transmissionPhase: TransmissionPhase = TransmissionPhase.IDLE,
     )
 
@@ -189,6 +190,7 @@ class FlashEngine(
                     sentFlashes = 0,
                     totalFlashes = encoding.flashCount,
                     transmittingCharacters = encoding.text.length,
+                    preparationSecondsRemaining = MorseSendCountdown.SECONDS,
                 )
             }
             if (!runCatching { torch.setTorch(false) }.isSuccess) {
@@ -196,7 +198,15 @@ class FlashEngine(
                 finishTransmission(TransmissionPhase.STOPPED)
                 return@launch
             }
-            _state.update { it.copy(transmissionPhase = TransmissionPhase.RUNNING) }
+            MorseSendCountdown.wait { secondsRemaining ->
+                _state.update { it.copy(preparationSecondsRemaining = secondsRemaining) }
+            }
+            _state.update {
+                it.copy(
+                    transmissionPhase = TransmissionPhase.RUNNING,
+                    preparationSecondsRemaining = 0,
+                )
+            }
             for (segment in encoding.segments) {
                 if (!runCatching { torch.setTorch(segment.lightOn) }.isSuccess) {
                     _events.value = Event.Failure(FailureKind.FLASH_LOST_SEND)
@@ -239,6 +249,7 @@ class FlashEngine(
             it.copy(
                 transmitting = false,
                 ledOn = false,
+                preparationSecondsRemaining = 0,
                 transmissionPhase = phase,
             )
         }
@@ -287,3 +298,15 @@ class FlashEngine(
 }
 
 class TorchUnavailableException(cause: Throwable? = null) : Exception(cause)
+
+internal object MorseSendCountdown {
+    const val SECONDS = 3
+    private const val SECOND_MILLIS = 1000L
+
+    suspend fun wait(onSecond: (Int) -> Unit) {
+        for (secondsRemaining in SECONDS downTo 1) {
+            onSecond(secondsRemaining)
+            delay(SECOND_MILLIS)
+        }
+    }
+}

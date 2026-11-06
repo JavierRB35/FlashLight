@@ -30,6 +30,7 @@ Las actualizaciones son voluntarias: solo después de pulsar **Actualizar** se d
   cortos) en bucle; requiere confirmación antes de cada sesión.
 - **Enviar:** escribe un mensaje y pulsa **Enviar con flash**. La app muestra
   una vista previa del texto normalizado y pide confirmación antes de emitirlo.
+  Tras confirmar, hay una cuenta atrás de 3 segundos antes del primer destello.
   Inicia primero la recepción en el otro teléfono y centra el flash emisor en
   su vista de cámara. La barra muestra el avance exacto por pulsos de luz
   completados (cada punto o raya cuenta como un destello).

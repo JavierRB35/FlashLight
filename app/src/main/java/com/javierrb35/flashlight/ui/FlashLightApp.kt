@@ -655,7 +655,7 @@ private fun SendPage(
 
         val statusLine = when (state.transmissionPhase) {
             FlashEngine.TransmissionPhase.PREPARING ->
-                "Preparando transmisión · ${state.transmittingCharacters} caracteres"
+                "El envío comienza en ${state.preparationSecondsRemaining}…"
 
             FlashEngine.TransmissionPhase.RUNNING ->
                 "Transmitiendo · ${state.transmittingCharacters} caracteres"
