@@ -42,8 +42,9 @@ Las actualizaciones son voluntarias: solo después de pulsar **Actualizar** se d
   en `A`) y la app avisa si debe omitir caracteres no compatibles.
 - La recepción se basa en el brillo de la imagen de cámara. La distancia,
   iluminación ambiental, enfoque y velocidad de fotogramas pueden afectar a la
-  precisión; para mejores resultados, mantén ambos teléfonos estables y el
-  emisor centrado en la vista previa.
+  precisión; la detección compara el contraste del flash con la luz ambiente
+  para adaptarse a cámaras con distintas exposiciones. Para mejores resultados,
+  mantén ambos teléfonos estables y el emisor centrado en la vista previa.
 - Al salir de la aplicación, el flash se apaga automáticamente.
 - La cámara se activa al iniciar la recepción y se cierra al detenerla o salir.
   No se toman fotos ni se graba vídeo.

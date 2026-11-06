@@ -17,6 +17,8 @@ import android.os.SystemClock
 import android.util.Size
 import android.view.Surface
 import android.view.TextureView
+import com.javierrb35.flashlight.receive.MorseLightDebouncer
+import com.javierrb35.flashlight.receive.MorseLightDetector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,9 +28,10 @@ import java.util.Arrays
 /**
  * Camera-based Morse receiver. Faithful port of the original pipeline: it
  * samples the central third of the luma plane, builds a brightness histogram,
- * takes the 99.5th percentile, adapts to ambient light, debounces the binary
- * light state for two frames and feeds [MorseDecoder], which turns the light
- * timings into text. No photos or video are recorded or stored.
+ * takes the 99.5th percentile, detects contrast relative to ambient light,
+ * debounces the binary light state for two frames and feeds [MorseDecoder],
+ * which turns the light timings into text. No photos or video are recorded or
+ * stored.
  */
 class MorseReceiver(
     private val context: Context,
@@ -64,13 +67,8 @@ class MorseReceiver(
 
     private var receiving = false
     private var cameraOpening = false
-    private var receiverStateInitialized = false
-    private var stableCameraLight = false
-    private var candidateCameraLight = false
-    private var candidateFrameCount = 0
-    private var candidateStartedAt = 0L
-    private var ambientBrightness = 0.0
-    private var ambientBrightnessInitialized = false
+    private val lightDetector = MorseLightDetector()
+    private val lightDebouncer = MorseLightDebouncer()
     private var lastPublishedText = ""
 
     val isActive: Boolean get() = receiving || cameraOpening
@@ -78,9 +76,8 @@ class MorseReceiver(
     fun start(previewTexture: TextureView?) {
         if (receiving) return
         synchronized(decoder) { decoder.reset() }
-        receiverStateInitialized = false
-        candidateFrameCount = 0
-        ambientBrightnessInitialized = false
+        lightDetector.reset()
+        lightDebouncer.reset()
         lastPublishedText = ""
         receiving = true
         _state.value = UiState(
@@ -296,15 +293,7 @@ class MorseReceiver(
                 cumulative += brightnessHistogram[value + 1]
                 value++
             }
-            if (!ambientBrightnessInitialized) {
-                ambientBrightness = value.toDouble()
-                ambientBrightnessInitialized = true
-            }
-            val bright = value >= BRIGHT_PIXEL_THRESHOLD &&
-                    value - ambientBrightness >= 18.0
-            if (!bright) {
-                ambientBrightness = ambientBrightness * 0.95 + value * 0.05
-            }
+            val bright = lightDetector.isBright(value)
             processBrightness(bright, SystemClock.elapsedRealtime())
         } finally {
             image.close()
@@ -313,31 +302,11 @@ class MorseReceiver(
 
     private fun processBrightness(bright: Boolean, now: Long) {
         if (!receiving) return
-        val published: String
-        synchronized(decoder) {
-            if (!receiverStateInitialized) {
-                candidateCameraLight = bright
-                stableCameraLight = bright
-                candidateFrameCount = 0
-                receiverStateInitialized = true
-                published = decoder.sample(bright, now)
-            } else {
-                if (bright != candidateCameraLight) {
-                    candidateCameraLight = bright
-                    candidateFrameCount = 1
-                    candidateStartedAt = now
-                } else {
-                    candidateFrameCount++
-                }
-                published = if (candidateFrameCount >= 2 && candidateCameraLight != stableCameraLight) {
-                    stableCameraLight = candidateCameraLight
-                    decoder.sample(stableCameraLight, candidateStartedAt)
-                } else {
-                    decoder.sample(stableCameraLight, now)
-                }
-            }
+        val stableSample = lightDebouncer.sample(bright, now) ?: return
+        val text = synchronized(decoder) {
+            decoder.sample(stableSample.lightOn, stableSample.timestampMillis)
         }
-        publish(published)
+        publish(text)
     }
 
     private fun publish(text: String) {
@@ -412,6 +381,5 @@ class MorseReceiver(
     companion object {
         private const val PREVIEW_WIDTH = 640
         private const val PREVIEW_HEIGHT = 480
-        const val BRIGHT_PIXEL_THRESHOLD = 220
     }
 }
