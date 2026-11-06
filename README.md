@@ -35,8 +35,10 @@ Las actualizaciones son voluntarias: solo después de pulsar **Actualizar** se d
   su vista de cámara. La barra muestra el avance exacto por pulsos de luz
   completados (cada punto o raya cuenta como un destello).
 - **Recibir:** concede el permiso de cámara al iniciar la recepción. La vista
-  previa analiza la luz y transcribe las letras detectadas en el editor; pulsa
-  **Detener recepción** para cerrar la cámara y finalizar el último carácter.
+  previa busca destellos en distintas zonas de la imagen y muestra un marcador
+  en la zona localizada para ayudarte a centrar el emisor; transcribe las letras
+  detectadas en el editor. Pulsa **Detener recepción** para cerrar la cámara y
+  finalizar el último carácter.
 - El envío usa Morse internacional a 200 ms por punto y 600 ms por raya. Las
   letras y palabras se separan con pausas estándar. Se admiten A–Z, números y
   los signos `. , ? !`; los acentos se normalizan (por ejemplo, `Á` se convierte
@@ -44,8 +46,9 @@ Las actualizaciones son voluntarias: solo después de pulsar **Actualizar** se d
 - La recepción se basa en el brillo de la imagen de cámara. La distancia,
   iluminación ambiental, enfoque y velocidad de fotogramas pueden afectar a la
   precisión; la detección compara el contraste del flash con la luz ambiente
-  para adaptarse a cámaras con distintas exposiciones. Para mejores resultados,
-  mantén ambos teléfonos estables y el emisor centrado en la vista previa.
+  en varias zonas para adaptarse a cámaras con distintas exposiciones. Para
+  mejores resultados, mantén ambos teléfonos estables y centra el emisor en el
+  marcador de la vista previa cuando aparezca.
 - Al salir de la aplicación, el flash se apaga automáticamente.
 - La cámara se activa al iniciar la recepción y se cierra al detenerla o salir.
   No se toman fotos ni se graba vídeo.

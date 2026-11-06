@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -761,42 +763,84 @@ private fun ReceivePage(
                 .padding(top = 8.dp)
                 .height(220.dp),
         ) {
-            AndroidView(
-                factory = { context ->
-                    TextureView(context).also { created ->
-                        created.contentDescription =
-                            "Vista de cámara para recibir Morse luminoso"
-                        onTextureViewReady(created)
-                        created.surfaceTextureListener =
-                            object : TextureView.SurfaceTextureListener {
-                                override fun onSurfaceTextureAvailable(
-                                    surface: android.graphics.SurfaceTexture,
-                                    width: Int,
-                                    height: Int,
-                                ) {
-                                    onSurfaceAvailable(created)
-                                }
+            Box(Modifier.fillMaxSize()) {
+                AndroidView(
+                    factory = { context ->
+                        TextureView(context).also { created ->
+                            created.contentDescription =
+                                "Vista de cámara para recibir Morse luminoso"
+                            onTextureViewReady(created)
+                            created.surfaceTextureListener =
+                                object : TextureView.SurfaceTextureListener {
+                                    override fun onSurfaceTextureAvailable(
+                                        surface: android.graphics.SurfaceTexture,
+                                        width: Int,
+                                        height: Int,
+                                    ) {
+                                        onSurfaceAvailable(created)
+                                    }
 
-                                override fun onSurfaceTextureSizeChanged(
-                                    surface: android.graphics.SurfaceTexture,
-                                    width: Int,
-                                    height: Int,
-                                ) {
-                                }
+                                    override fun onSurfaceTextureSizeChanged(
+                                        surface: android.graphics.SurfaceTexture,
+                                        width: Int,
+                                        height: Int,
+                                    ) {
+                                    }
 
-                                override fun onSurfaceTextureDestroyed(
-                                    surface: android.graphics.SurfaceTexture,
-                                ): Boolean = true
+                                    override fun onSurfaceTextureDestroyed(
+                                        surface: android.graphics.SurfaceTexture,
+                                    ): Boolean = true
 
-                                override fun onSurfaceTextureUpdated(
-                                    surface: android.graphics.SurfaceTexture,
-                                ) {
+                                    override fun onSurfaceTextureUpdated(
+                                        surface: android.graphics.SurfaceTexture,
+                                    ) {
+                                    }
                                 }
-                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                receiverState.detectedPoint?.let { point ->
+                    Canvas(Modifier.fillMaxSize()) {
+                        val center = androidx.compose.ui.geometry.Offset(
+                            x = size.width * point.x,
+                            y = size.height * point.y,
+                        )
+                        val radius = 24.dp.toPx()
+                        drawCircle(
+                            color = Color(0xFFFFD54F),
+                            radius = radius,
+                            center = center,
+                            style = Stroke(width = 3.dp.toPx()),
+                        )
+                        drawCircle(
+                            color = Color(0xFFFFD54F),
+                            radius = 3.dp.toPx(),
+                            center = center,
+                        )
+                        drawLine(
+                            color = Color(0xFFFFD54F),
+                            start = androidx.compose.ui.geometry.Offset(
+                                center.x - radius - 5.dp.toPx(), center.y,
+                            ),
+                            end = androidx.compose.ui.geometry.Offset(
+                                center.x + radius + 5.dp.toPx(), center.y,
+                            ),
+                            strokeWidth = 2.dp.toPx(),
+                        )
+                        drawLine(
+                            color = Color(0xFFFFD54F),
+                            start = androidx.compose.ui.geometry.Offset(
+                                center.x, center.y - radius - 5.dp.toPx(),
+                            ),
+                            end = androidx.compose.ui.geometry.Offset(
+                                center.x, center.y + radius + 5.dp.toPx(),
+                            ),
+                            strokeWidth = 2.dp.toPx(),
+                        )
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+                }
+            }
         }
         Surface(
             shape = RoundedCornerShape(12.dp),

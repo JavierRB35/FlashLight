@@ -2,11 +2,13 @@ package com.javierrb35.flashlight
 
 import com.javierrb35.flashlight.receive.MorseLightDebouncer
 import com.javierrb35.flashlight.receive.MorseLightDetector
+import com.javierrb35.flashlight.receive.MorseFlashLocator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.ByteBuffer
 
 class MorseReceptionPipelineTest {
     @Test
@@ -16,6 +18,70 @@ class MorseReceptionPipelineTest {
 
         assertTrue(detector.isBright(170))
         assertFalse(detector.isBright(30))
+    }
+
+    @Test
+    fun locatesFlashingSourceOutsideTheCenterAndKeepsItsMarkerDuringDarkPulses() {
+        val locator = MorseFlashLocator()
+        val ambient = IntArray(MorseFlashLocator.CELL_COUNT) { AMBIENT_BRIGHTNESS }
+        val flashCell = 2 * MorseFlashLocator.COLUMNS + 5
+
+        assertFalse(locator.analyze(ambient).lightOn)
+        val brightFrame = ambient.copyOf().also { it[flashCell] = FLASH_BRIGHTNESS }
+        val detected = locator.analyze(brightFrame)
+
+        assertTrue(detected.lightOn)
+        assertEquals(
+            MorseFlashLocator.Point(
+                x = 5.5f / MorseFlashLocator.COLUMNS,
+                y = 2.5f / MorseFlashLocator.ROWS,
+            ),
+            detected.point,
+        )
+        val darkFrame = locator.analyze(ambient)
+        assertFalse(darkFrame.lightOn)
+        assertEquals(detected.point, darkFrame.point)
+    }
+
+    @Test
+    fun detectsSmallOffCenterFlashInSampledCameraImage() {
+        val locator = MorseFlashLocator()
+        val width = 600
+        val height = 400
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+
+        assertFalse(
+            locator.analyze(
+                locator.measureBrightness(ByteBuffer.wrap(pixels), width, height, width, 1),
+            ).lightOn,
+        )
+        for (y in 250 until 254) {
+            for (x in 550 until 556) {
+                pixels[y * width + x] = FLASH_BRIGHTNESS.toByte()
+            }
+        }
+
+        val detection = locator.analyze(
+            locator.measureBrightness(ByteBuffer.wrap(pixels), width, height, width, 1),
+        )
+        assertTrue(detection.lightOn)
+        assertEquals(
+            MorseFlashLocator.Point(
+                x = 5.5f / MorseFlashLocator.COLUMNS,
+                y = 2.5f / MorseFlashLocator.ROWS,
+            ),
+            detection.point,
+        )
+    }
+
+    @Test
+    fun ignoresSteadyBrightArea() {
+        val locator = MorseFlashLocator()
+        val steadyLight = IntArray(MorseFlashLocator.CELL_COUNT) { FLASH_BRIGHTNESS }
+
+        repeat(10) {
+            assertFalse(locator.analyze(steadyLight).lightOn)
+        }
     }
 
     @Test

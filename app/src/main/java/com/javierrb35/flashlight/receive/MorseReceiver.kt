@@ -18,17 +18,15 @@ import android.util.Size
 import android.view.Surface
 import android.view.TextureView
 import com.javierrb35.flashlight.receive.MorseLightDebouncer
-import com.javierrb35.flashlight.receive.MorseLightDetector
+import com.javierrb35.flashlight.receive.MorseFlashLocator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.ByteBuffer
-import java.util.Arrays
 
 /**
- * Camera-based Morse receiver. Faithful port of the original pipeline: it
- * samples the central third of the luma plane, builds a brightness histogram,
- * takes the 99.5th percentile, detects contrast relative to ambient light,
+ * Camera-based Morse receiver. It samples a grid across the luma plane,
+ * detects local contrast relative to ambient light,
  * debounces the binary light state for two frames and feeds [MorseDecoder],
  * which turns the light timings into text. No photos or video are recorded or
  * stored.
@@ -46,18 +44,19 @@ class MorseReceiver(
         val text: String = "",
         /** Last human-facing hint, matching the original status lines. */
         val hint: String = "",
+        val detectedPoint: SignalPoint? = null,
     ) {
         /** True while the receiver is starting or actively listening. */
         val listening: Boolean
             get() = status == Status.STARTING || status == Status.LISTENING
     }
 
+    data class SignalPoint(val x: Float, val y: Float)
+
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private val decoder = MorseDecoder()
-    private val brightnessHistogram = IntArray(256)
-
     private var cameraThread: HandlerThread? = null
     private var cameraHandler: Handler? = null
     private var camera: CameraDevice? = null
@@ -67,7 +66,7 @@ class MorseReceiver(
 
     private var receiving = false
     private var cameraOpening = false
-    private val lightDetector = MorseLightDetector()
+    private val flashLocator = MorseFlashLocator()
     private val lightDebouncer = MorseLightDebouncer()
     private var lastPublishedText = ""
 
@@ -76,14 +75,14 @@ class MorseReceiver(
     fun start(previewTexture: TextureView?) {
         if (receiving) return
         synchronized(decoder) { decoder.reset() }
-        lightDetector.reset()
+        flashLocator.reset()
         lightDebouncer.reset()
         lastPublishedText = ""
         receiving = true
         _state.value = UiState(
             status = Status.STARTING,
             text = "",
-            hint = "Centra la luz del emisor. Inicia primero esta recepción.",
+            hint = "Buscando destellos en la vista. Apunta la cámara hacia el emisor.",
         )
         startCameraThread()
         if (previewTexture?.isAvailable() == true) openReceiverCamera(previewTexture)
@@ -270,34 +269,29 @@ class MorseReceiver(
             val pixelStride = planes[0].pixelStride
             val width = image.width
             val height = image.height
-            Arrays.fill(brightnessHistogram, 0)
-            var sampledPixels = 0
-            var y = height / 3
-            while (y < height * 2 / 3) {
-                var x = width / 3
-                while (x < width * 2 / 3) {
-                    val index = y * rowStride + x * pixelStride
-                    if (index >= 0 && index < luma.limit()) {
-                        brightnessHistogram[luma.get(index).toInt() and 0xFF]++
-                        sampledPixels++
-                    }
-                    x += 2
-                }
-                y += 2
-            }
-            val percentile = Math.max(0, Math.ceil(sampledPixels * 0.995).toInt() - 1)
-            var value = 0
-            var cumulative = brightnessHistogram[0]
-            while (value < 255) {
-                if (cumulative > percentile) break
-                cumulative += brightnessHistogram[value + 1]
-                value++
-            }
-            val bright = lightDetector.isBright(value)
-            processBrightness(bright, SystemClock.elapsedRealtime())
+            val cellBrightness = flashLocator.measureBrightness(
+                luma, width, height, rowStride, pixelStride,
+            )
+            val detection = flashLocator.analyze(cellBrightness)
+            processBrightness(detection.lightOn, SystemClock.elapsedRealtime())
+            publishDetectedPoint(detection.point)
         } finally {
             image.close()
         }
+    }
+
+    private fun publishDetectedPoint(point: MorseFlashLocator.Point?) {
+        val signalPoint = point?.let { SignalPoint(it.x, it.y) }
+        val current = _state.value
+        if (current.detectedPoint == signalPoint) return
+        _state.value = current.copy(
+            detectedPoint = signalPoint,
+            hint = if (signalPoint == null) {
+                "Buscando destellos en la vista. Apunta la cámara hacia el emisor."
+            } else {
+                "Flash localizado: centra la luz en el marcador para optimizar la recepción."
+            },
+        )
     }
 
     private fun processBrightness(bright: Boolean, now: Long) {
