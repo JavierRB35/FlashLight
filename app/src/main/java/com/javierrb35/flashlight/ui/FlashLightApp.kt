@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FlashlightOn
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Sos
@@ -609,19 +610,45 @@ private fun SendPage(
             text = "Mensaje para transmitir",
             style = MaterialTheme.typography.titleMedium,
         )
-        OutlinedTextField(
-            value = message,
-            onValueChange = onMessageChange,
-            enabled = !state.transmitting,
-            placeholder = { Text("Escribe texto sin límite práctico") },
-            minLines = 2,
-            maxLines = 5,
-            shape = RoundedCornerShape(14.dp),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp),
-        )
+        ) {
+            OutlinedTextField(
+                value = message,
+                onValueChange = onMessageChange,
+                enabled = !state.transmitting,
+                placeholder = { Text("Escribe texto sin límite práctico") },
+                minLines = 2,
+                maxLines = 5,
+                shape = RoundedCornerShape(14.dp),
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Sentences,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (message.isNotEmpty() && !state.transmitting) {
+                IconButton(
+                    onClick = {
+                        onMessageChange("")
+                        focusManager.clearFocus()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 8.dp)
+                        .size(36.dp)
+                        .semantics { contentDescription = "Borrar mensaje" },
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(10.dp))
 
