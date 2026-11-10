@@ -108,6 +108,25 @@ class MorseReceptionPipelineTest {
     }
 
     @Test
+    fun detectsFlashingAreaNextToSteadyBrighterPixel() {
+        val locator = MorseFlashLocator()
+        val width = 600
+        val height = 400
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+        pixels[250 * width + 550] = 245.toByte()
+
+        assertFalse(locator.analyze(locator.measureBrightness(luma, width, height, width, 1)).lightOn)
+        for (y in 250 until 258) {
+            for (x in 552 until 560) {
+                pixels[y * width + x] = FLASH_BRIGHTNESS.toByte()
+            }
+        }
+
+        assertTrue(locator.analyze(locator.measureBrightness(luma, width, height, width, 1)).lightOn)
+    }
+
+    @Test
     fun supportsPaddedCameraRowsAndPixelStride() {
         val locator = MorseFlashLocator()
         val width = 160
