@@ -75,6 +75,62 @@ class MorseReceptionPipelineTest {
     }
 
     @Test
+    fun detectsSinglePixelEvenWhenFormerPercentileDiscardedIt() {
+        val locator = MorseFlashLocator()
+        val width = 600
+        val height = 400
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+
+        assertFalse(locator.analyze(locator.measureBrightness(luma, width, height, width, 1)).lightOn)
+        pixels[252 * width + 550] = FLASH_BRIGHTNESS.toByte()
+
+        val detection = locator.analyze(locator.measureBrightness(luma, width, height, width, 1))
+        assertTrue(detection.lightOn)
+        assertEquals(
+            MorseFlashLocator.Point(5.5f / MorseFlashLocator.COLUMNS, 2.5f / MorseFlashLocator.ROWS),
+            detection.point,
+        )
+    }
+
+    @Test
+    fun detectsSinglePixelOnOddCoordinatesThatFormerSamplingSkipped() {
+        val locator = MorseFlashLocator()
+        val width = 160
+        val height = 120
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+
+        assertFalse(locator.analyze(locator.measureBrightness(luma, width, height, width, 1)).lightOn)
+        pixels[97 * width + 147] = FLASH_BRIGHTNESS.toByte()
+
+        assertTrue(locator.analyze(locator.measureBrightness(luma, width, height, width, 1)).lightOn)
+    }
+
+    @Test
+    fun supportsPaddedCameraRowsAndPixelStride() {
+        val locator = MorseFlashLocator()
+        val width = 160
+        val height = 120
+        val rowStride = 336
+        val pixelStride = 2
+        val pixels = ByteArray(rowStride * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+
+        assertFalse(
+            locator.analyze(
+                locator.measureBrightness(luma, width, height, rowStride, pixelStride),
+            ).lightOn,
+        )
+        pixels[97 * rowStride + 147 * pixelStride] = FLASH_BRIGHTNESS.toByte()
+        assertTrue(
+            locator.analyze(
+                locator.measureBrightness(luma, width, height, rowStride, pixelStride),
+            ).lightOn,
+        )
+    }
+
+    @Test
     fun ignoresSteadyBrightArea() {
         val locator = MorseFlashLocator()
         val steadyLight = IntArray(MorseFlashLocator.CELL_COUNT) { FLASH_BRIGHTNESS }
@@ -82,6 +138,27 @@ class MorseReceptionPipelineTest {
         repeat(10) {
             assertFalse(locator.analyze(steadyLight).lightOn)
         }
+    }
+
+    @Test
+    fun rejectsAnIsolatedBrightFrameBeforeDecoding() {
+        val locator = MorseFlashLocator()
+        val debouncer = MorseLightDebouncer()
+        val width = 160
+        val height = 120
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+
+        val ambient = locator.analyze(locator.measureBrightness(luma, width, height, width, 1))
+        assertEquals(MorseLightDebouncer.Sample(false, 0), debouncer.sample(ambient.lightOn, 0))
+        pixels[37 * width + 23] = FLASH_BRIGHTNESS.toByte()
+        val glitch = locator.analyze(locator.measureBrightness(luma, width, height, width, 1))
+        assertTrue(glitch.lightOn)
+        assertNull(debouncer.sample(glitch.lightOn, 33))
+        pixels[37 * width + 23] = AMBIENT_BRIGHTNESS.toByte()
+        val restored = locator.analyze(locator.measureBrightness(luma, width, height, width, 1))
+        assertFalse(restored.lightOn)
+        assertEquals(MorseLightDebouncer.Sample(false, 66), debouncer.sample(restored.lightOn, 66))
     }
 
     @Test
@@ -118,6 +195,44 @@ class MorseReceptionPipelineTest {
             val brightness = if (lightOn) FLASH_BRIGHTNESS else AMBIENT_BRIGHTNESS
             val detectedLight = detector.isBright(brightness)
             debouncer.sample(detectedLight, now)?.let { sample ->
+                decoder.sample(sample.lightOn, sample.timestampMillis)
+            }
+        }
+
+        assertEquals(expected, decoder.text())
+    }
+
+    @Test
+    fun transcribesSinglePixelMorseFlashesFromCameraFrames() {
+        val expected = "HI 5"
+        val encoding = MorseCodec.encode(expected)
+        val locator = MorseFlashLocator()
+        val debouncer = MorseLightDebouncer()
+        val decoder = MorseDecoder()
+        val width = 160
+        val height = 120
+        val pixels = ByteArray(width * height) { AMBIENT_BRIGHTNESS.toByte() }
+        val luma = ByteBuffer.wrap(pixels)
+        val flashPixel = 97 * width + 147
+        var segmentIndex = 0
+        var segmentEndsAt = 400L + encoding.segments.first().durationMillis
+        val signalEnd = 400L + encoding.segments.sumOf { it.durationMillis }
+
+        for (now in 0L..(signalEnd + 600L) step FRAME_INTERVAL_MILLIS) {
+            while (segmentIndex < encoding.segments.size && now >= segmentEndsAt) {
+                segmentIndex++
+                if (segmentIndex < encoding.segments.size) {
+                    segmentEndsAt += encoding.segments[segmentIndex].durationMillis
+                }
+            }
+            val lightOn = now >= 400L && segmentIndex < encoding.segments.size &&
+                encoding.segments[segmentIndex].lightOn
+            pixels[flashPixel] =
+                (if (lightOn) FLASH_BRIGHTNESS else AMBIENT_BRIGHTNESS).toByte()
+            val detection = locator.analyze(
+                locator.measureBrightness(luma, width, height, width, 1),
+            )
+            debouncer.sample(detection.lightOn, now)?.let { sample ->
                 decoder.sample(sample.lightOn, sample.timestampMillis)
             }
         }
