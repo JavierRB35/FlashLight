@@ -8,14 +8,19 @@ internal class MorseFlashLocator {
 
     data class Detection(val lightOn: Boolean, val point: Point?)
 
-    private val detectors = Array(CELL_COUNT) { MorseLightDetector() }
-    private val brightnessHistograms = Array(CELL_COUNT) { IntArray(256) }
-    private val sampledPixels = IntArray(CELL_COUNT)
-    private val cellBrightness = IntArray(CELL_COUNT)
+    data class Brightness(val peak: IntArray, val fourthBrightest: IntArray)
+
+    private val peakDetectors = Array(CELL_COUNT) { MorseLightDetector() }
+    private val areaDetectors = Array(CELL_COUNT) { MorseLightDetector() }
+    private val topPixels = IntArray(CELL_COUNT * TOP_PIXELS)
+    private val peak = IntArray(CELL_COUNT)
+    private val fourthBrightest = IntArray(CELL_COUNT)
+    private val measuredBrightness = Brightness(peak, fourthBrightest)
     private var lastDetectedCell: Int? = null
 
     fun reset() {
-        detectors.forEach(MorseLightDetector::reset)
+        peakDetectors.forEach(MorseLightDetector::reset)
+        areaDetectors.forEach(MorseLightDetector::reset)
         lastDetectedCell = null
     }
 
@@ -25,54 +30,60 @@ internal class MorseFlashLocator {
         height: Int,
         rowStride: Int,
         pixelStride: Int,
-    ): IntArray {
+    ): Brightness {
         require(width > 0 && height > 0)
-        brightnessHistograms.forEach { Arrays.fill(it, 0) }
-        Arrays.fill(sampledPixels, 0)
+        Arrays.fill(topPixels, 0)
+        val bufferLimit = luma.limit()
 
-        var y = 0
-        while (y < height) {
-            var x = 0
-            while (x < width) {
-                val offset = y * rowStride + x * pixelStride
-                if (offset >= 0 && offset < luma.limit()) {
-                    val cell = y * ROWS / height * COLUMNS + x * COLUMNS / width
-                    brightnessHistograms[cell][luma.get(offset).toInt() and 0xFF]++
-                    sampledPixels[cell]++
+        // Scan every pixel: a distant LED can occupy one pixel at an odd
+        // coordinate and disappear entirely with step-2 sampling. Keep both
+        // the maximum and the fourth brightest pixel so a steady hotspot
+        // cannot hide a larger flashing source in the same camera region.
+        for (y in 0 until height) {
+            val rowOffset = y * rowStride
+            val cellRow = y * ROWS / height * COLUMNS
+            for (x in 0 until width) {
+                val offset = rowOffset + x * pixelStride
+                if (offset >= 0 && offset < bufferLimit) {
+                    val cell = cellRow + x * COLUMNS / width
+                    val value = luma.get(offset).toInt() and 0xFF
+                    var rank = cell * TOP_PIXELS
+                    if (value > topPixels[rank]) {
+                        topPixels[rank] = value
+                        val lastRank = rank + TOP_PIXELS - 1
+                        while (rank < lastRank && topPixels[rank] > topPixels[rank + 1]) {
+                            val lower = topPixels[rank + 1]
+                            topPixels[rank + 1] = topPixels[rank]
+                            topPixels[rank] = lower
+                            rank++
+                        }
+                    }
                 }
-                x += SAMPLE_STEP
             }
-            y += SAMPLE_STEP
         }
-
-        for (cell in cellBrightness.indices) {
-            val count = sampledPixels[cell]
-            if (count == 0) {
-                cellBrightness[cell] = 0
-                continue
-            }
-            val percentile = Math.max(0, Math.ceil(count * CELL_PERCENTILE).toInt() - 1)
-            val histogram = brightnessHistograms[cell]
-            var value = 0
-            var cumulative = histogram[0]
-            while (value < 255 && cumulative <= percentile) {
-                value++
-                cumulative += histogram[value]
-            }
-            cellBrightness[cell] = value
+        for (cell in 0 until CELL_COUNT) {
+            val start = cell * TOP_PIXELS
+            fourthBrightest[cell] = topPixels[start]
+            peak[cell] = topPixels[start + TOP_PIXELS - 1]
         }
-        return cellBrightness
+        return measuredBrightness
     }
 
-    fun analyze(cellBrightness: IntArray): Detection {
-        require(cellBrightness.size == CELL_COUNT) {
-            "Expected $CELL_COUNT brightness values, got ${cellBrightness.size}"
+    /** For callers that already have a representative brightness per region. */
+    fun analyze(cellBrightness: IntArray): Detection =
+        analyze(Brightness(cellBrightness, cellBrightness))
+
+    fun analyze(brightness: Brightness): Detection {
+        require(brightness.peak.size == CELL_COUNT && brightness.fourthBrightest.size == CELL_COUNT) {
+            "Expected $CELL_COUNT brightness values per region"
         }
 
         var strongestCell: Int? = null
         var strongestContrast = 0
-        for (index in cellBrightness.indices) {
-            val contrast = detectors[index].signalContrast(cellBrightness[index]) ?: continue
+        for (index in 0 until CELL_COUNT) {
+            val peakContrast = peakDetectors[index].signalContrast(brightness.peak[index]) ?: 0
+            val areaContrast = areaDetectors[index].signalContrast(brightness.fourthBrightest[index]) ?: 0
+            val contrast = maxOf(peakContrast, areaContrast)
             if (contrast > strongestContrast) {
                 strongestCell = index
                 strongestContrast = contrast
@@ -93,7 +104,6 @@ internal class MorseFlashLocator {
         const val COLUMNS = 6
         const val ROWS = 4
         const val CELL_COUNT = COLUMNS * ROWS
-        const val CELL_PERCENTILE = 0.999
-        private const val SAMPLE_STEP = 2
+        private const val TOP_PIXELS = 4
     }
 }
